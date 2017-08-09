@@ -1,7 +1,5 @@
 package com.thinkbiganalytics.metadata.modeshape;
 
-import com.google.common.base.Strings;
-
 /*-
  * #%L
  * thinkbig-metadata-modeshape
@@ -43,7 +41,6 @@ import org.springframework.data.domain.Sort;
 
 import java.io.Serializable;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
