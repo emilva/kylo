@@ -20,14 +20,50 @@ package com.thinkbiganalytics.feedmgr.service.feed;
  * #L%
  */
 
+import java.io.Serializable;
+import java.security.Principal;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import javax.annotation.Nonnull;
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
+import javax.inject.Inject;
+import javax.ws.rs.NotFoundException;
+
+import org.apache.commons.collections.ListUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.joda.time.DateTime;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DataAccessException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.security.core.context.SecurityContextHolder;
+
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import com.thinkbiganalytics.datalake.authorization.service.HadoopAuthorizationService;
 import com.thinkbiganalytics.feedmgr.nifi.CreateFeedBuilder;
 import com.thinkbiganalytics.feedmgr.nifi.PropertyExpressionResolver;
 import com.thinkbiganalytics.feedmgr.nifi.cache.NifiFlowCache;
+import com.thinkbiganalytics.feedmgr.rest.model.EntityVersion;
 import com.thinkbiganalytics.feedmgr.rest.model.FeedMetadata;
 import com.thinkbiganalytics.feedmgr.rest.model.FeedSummary;
+import com.thinkbiganalytics.feedmgr.rest.model.FeedVersions;
 import com.thinkbiganalytics.feedmgr.rest.model.NifiFeed;
 import com.thinkbiganalytics.feedmgr.rest.model.RegisteredTemplate;
 import com.thinkbiganalytics.feedmgr.rest.model.RegisteredTemplateRequest;
@@ -87,40 +123,6 @@ import com.thinkbiganalytics.rest.model.LabelValue;
 import com.thinkbiganalytics.security.AccessController;
 import com.thinkbiganalytics.security.action.Action;
 import com.thinkbiganalytics.support.FeedNameUtil;
-
-import org.apache.commons.collections.ListUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.joda.time.DateTime;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.dao.DataAccessException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.context.SecurityContextHolder;
-
-import java.io.Serializable;
-import java.security.Principal;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.Set;
-import java.util.stream.Collectors;
-
-import javax.annotation.Nonnull;
-import javax.annotation.PostConstruct;
-import javax.annotation.PreDestroy;
-import javax.inject.Inject;
-import javax.ws.rs.NotFoundException;
 
 public class DefaultFeedManagerFeedService implements FeedManagerFeedService {
 
@@ -277,6 +279,32 @@ public class DefaultFeedManagerFeedService implements FeedManagerFeedService {
 
     }
 
+    @Override
+    public FeedVersions getFeedVersions(String feedId, boolean includeContent) {
+        return metadataAccess.read(() -> {
+            this.accessController.checkPermission(AccessController.SERVICES, FeedServicesAccessControl.ACCESS_FEEDS);
+
+            Feed.ID domainId = feedProvider.resolveId(feedId);
+            
+            return feedProvider.findVersions(domainId, includeContent)
+                            .map(list -> feedModelTransform.domainToFeedVersions(list, domainId))
+                            .orElse((FeedVersions) null);
+        });
+    }
+    
+    @Override
+    public Optional<EntityVersion> getFeedVersion(String feedId, String versionId, boolean includeContent) {
+        return metadataAccess.read(() -> {
+            this.accessController.checkPermission(AccessController.SERVICES, FeedServicesAccessControl.ACCESS_FEEDS);
+
+            Feed.ID domainFeedId = feedProvider.resolveId(feedId);
+            com.thinkbiganalytics.metadata.api.versioning.EntityVersion.ID domainVersionId = feedProvider.resolveVersion(versionId);
+            
+            return feedProvider.findVersion(domainFeedId, domainVersionId, includeContent)
+                            .map(version -> feedModelTransform.domainToFeedVersion(version));
+        });
+    }
+    
     @Override
     public Collection<FeedMetadata> getFeeds() {
         return getFeeds(PAGE_ALL, null).getContent();
